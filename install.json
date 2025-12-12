@@ -16,6 +16,12 @@
     {
       "method": "shell.run",
       "params": {
+        "message": "conda install ffmpeg -y"
+      }
+    },
+    {
+      "method": "shell.run",
+      "params": {
         "venv": "venv",
         "path": "app",
         "chain": true,

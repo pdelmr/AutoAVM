@@ -1,1 +1,4 @@
 gradio
+librosa
+matplotlib
+scenedetect[opencv]

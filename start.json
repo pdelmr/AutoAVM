@@ -14,7 +14,7 @@
         ],
         "on": [
           {
-            "event": "/http://\\S+/",
+            "event": "/http:\\/\\/\\S+/",
             "done": true
           }
         ]

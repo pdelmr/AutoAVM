@@ -1,0 +1,8 @@
+{
+  "title": "AutoAMV",
+  "description": "Put a song, put a video and feel de magic.",
+  "plugin": {
+    "menu": []
+  },
+  "icon": "icon.jpg"
+}
