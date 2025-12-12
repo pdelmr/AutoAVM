@@ -48,7 +48,7 @@ def _ffprobe_duration(path):
     result = subprocess.run(cmd, check=True, capture_output=True, text=True)
     return float(result.stdout.strip())
 
-def _detect_scenes_segment(video_path, start_time, end_time, detector_type, threshold, min_scene_len):
+def _detect_scenes_segment(video_path, start_time, end_time, detector_type, threshold, min_scene_len, frame_window, min_content_val):
     video = open_video(video_path)
     try:
         fps = video.frame_rate
@@ -71,7 +71,7 @@ def _detect_scenes_segment(video_path, start_time, end_time, detector_type, thre
         if detector_type == "detect-threshold":
             scene_manager.add_detector(ThresholdDetector(threshold=threshold, min_scene_len=min_scene_len_frames))
         elif detector_type == "detect-adaptive":
-            scene_manager.add_detector(AdaptiveDetector(adaptive_threshold=threshold, min_scene_len=min_scene_len_frames))
+            scene_manager.add_detector(AdaptiveDetector(adaptive_threshold=threshold, min_scene_len=min_scene_len_frames, frame_window=frame_window, min_content_val=min_content_val))
         else:
             scene_manager.add_detector(ContentDetector(threshold=threshold, min_scene_len=min_scene_len_frames))
             
@@ -91,7 +91,7 @@ def _merge_scene_lists(scene_lists):
     merged.sort(key=lambda x: (x[0].get_seconds(), x[0].get_frames()))
     return merged
 
-def _collect_scene_list(video_path, detector_type, threshold, min_scene_len, progress_callback=None):
+def _collect_scene_list(video_path, detector_type, threshold, min_scene_len, frame_window, min_content_val, progress_callback=None):
     progress_description = getattr(sm, "PROGRESS_BAR_DESCRIPTION", "  Detected: %d | Progress")
 
     def report(value, desc):
@@ -127,7 +127,7 @@ def _collect_scene_list(video_path, detector_type, threshold, min_scene_len, pro
     scene_lists = []
     # Map segments to future results
     with ProcessPoolExecutor(max_workers=len(segments)) as executor:
-        futures = [executor.submit(_detect_scenes_segment, video_path, start, end, detector_type, threshold, min_scene_len) for start, end in segments]
+        futures = [executor.submit(_detect_scenes_segment, video_path, start, end, detector_type, threshold, min_scene_len, frame_window, min_content_val) for start, end in segments]
         
         count = 0
         for future in as_completed(futures):
@@ -876,7 +876,7 @@ def generate_previews(video_path, scene_list, mode="Thumbnails"):
 
     return previews
 
-def detect_scenes(video_file, detector_type, threshold, min_scene_len, preview_mode="Thumbnails", progress=gr.Progress()):
+def detect_scenes(video_file, detector_type, threshold, min_scene_len, frame_window, min_content_val, preview_mode="Thumbnails", progress=gr.Progress()):
     global last_scene_list
     if video_file is None:
         return [], gr.update(choices=[], value=[])
@@ -884,7 +884,7 @@ def detect_scenes(video_file, detector_type, threshold, min_scene_len, preview_m
     video_path = video_file.name
     progress(0.05, desc="Preparing video")
     
-    scene_list = _collect_scene_list(video_path, detector_type, threshold, min_scene_len, progress_callback=progress)
+    scene_list = _collect_scene_list(video_path, detector_type, threshold, min_scene_len, frame_window, min_content_val, progress_callback=progress)
     progress(0.8, desc="Processing results")
     if not scene_list:
         progress(1, desc="Done")
@@ -912,12 +912,9 @@ def detect_scenes(video_file, detector_type, threshold, min_scene_len, preview_m
     
     return previews, gr.update(choices=choices, value=choices)
 
-def update_threshold_label(choice):
-    if choice == "detect-threshold":
-        return gr.update(label="Threshold (Umbral de Brillo)", value=12.0, minimum=0, maximum=255, info="Umbral para detectar negro. Menor = Estricto (solo negro puro). Mayor = Acepta gris oscuro.")
-    else:
-        # Default for Content/Adaptive
-        return gr.update(label="Threshold (Umbral de Cambio)", value=30.0, minimum=0, maximum=100, info="Menor valor = Menos cortes. Mayor valor = Más cortes.")
+def create_amv(video_file, audio_file, cut_intensity, video_direction, shuffle_scenes, allow_stretch, selected_transitions, quality_preset, clips_speed, crop_start, crop_end, aspect_ratio, selected_clips):
+    global last_scene_list, last_beat_times, last_audio_duration
+    
 
 with gr.Blocks() as demo:
     gr.Markdown("## AutoAMV")
@@ -983,6 +980,20 @@ with gr.Blocks() as demo:
                             step=0.1,
                             info="Minimum duration of a scene to be accepted."
                         )
+                        frame_window = gr.Number(
+                            label="Frame Window (Fotogramas Ventana)",
+                            value=2,
+                            step=1,
+                            info="Cuántos fotogramas hacia atrás y adelante se usan para calcular el promedio de movimiento.",
+                            visible=False # Hidden by default
+                        )
+                        min_content_val = gr.Number(
+                            label="Min Content Value (Valor Mínimo Contenido)",
+                            value=15.0,
+                            step=0.1,
+                            info="Cambio absoluto mínimo que debe ocurrir, independientemente del promedio.",
+                            visible=False # Hidden by default
+                        )
                         
                         preview_mode = gr.Dropdown(
                             label="Preview Mode",
@@ -993,7 +1004,17 @@ with gr.Blocks() as demo:
                     
                     clips_button = gr.Button("Generate Clips", variant="primary")
                     
-                    detector_type.change(fn=update_threshold_label, inputs=detector_type, outputs=threshold_slider)
+                    detector_type.change(
+                        fn=lambda x: [
+                            gr.update(label="Threshold (Umbral de Brillo)", value=12.0, minimum=0, maximum=255, info="Umbral para detectar negro. Menor = Estricto (solo negro puro). Mayor = Acepta gris oscuro.") if x == "detect-threshold" 
+                            else (gr.update(label="Threshold (Umbral Adaptativo)", value=3.0, minimum=1.0, maximum=20.0, info="Define cuánto más alto debe ser el cambio actual comparado con el promedio de fotogramas anteriores para considerarse un corte. Menor = Más sensible, Mayor = Más estricto.") if x == "detect-adaptive" 
+                            else gr.update(label="Threshold (Umbral de Cambio)", value=30.0, minimum=0, maximum=100, info="Menor valor = Menos cortes. Mayor valor = Más cortes.")),
+                            gr.update(visible=x == "detect-adaptive"), # frame_window visibility
+                            gr.update(visible=x == "detect-adaptive")  # min_content_val visibility
+                        ], 
+                        inputs=detector_type, 
+                        outputs=[threshold_slider, frame_window, min_content_val]
+                    )
 
                 with gr.Column(scale=2):
                     scenes_gallery = gr.Gallery(label="Scene Previews", show_label=True, elem_id="gallery", columns=4, height="auto")
