@@ -1,0 +1,40 @@
+1. Preset "CLEAN" (Natural / Cine)
+Mejora la calidad sutilmente. Enfoca un poco y corrige el color sin que parezca un filtro de Instagram. Ideal para vídeos que ya se ven bien.
+
+JSON para n8n:
+
+JSON
+
+{
+  "command": "ffmpeg -y -i \"Y:/ChronAIclesMusic/video_input.mp4\" -map_metadata -1 -metadata title=\"Mi Video Clean\" -metadata artist=\"Tu Nombre\" -c:v av1_nvenc -preset p7 -cq 24 -pix_fmt yuv420p -vf \"cas=0.3,eq=contrast=1.05:saturation=1.1:brightness=0.0:gamma=1.0\" -c:a aac -b:a 192k \"Y:/ChronAIclesMusic/video_clean.mp4\""
+}
+2. Preset "VIBRANT" (Tu Estándar / Anime) ⭐ El Recomendado
+El equilibrio perfecto. Da ese look "High Definition" viral. Colores vivos, negros definidos y alta nitidez sin romper la imagen. Perfecto para AMVs.
+
+JSON para n8n:
+
+JSON
+
+{
+  "command": "ffmpeg -y -i \"Y:/ChronAIclesMusic/video_input.mp4\" -map_metadata -1 -metadata title=\"Mi Video Vibrant\" -metadata artist=\"Tu Nombre\" -c:v av1_nvenc -preset p7 -cq 24 -pix_fmt yuv420p -vf \"cas=0.6,eq=contrast=1.12:saturation=1.3:brightness=0.02:gamma=1.05\" -c:a aac -b:a 192k \"Y:/ChronAIclesMusic/video_vibrant.mp4\""
+}
+3. Preset "AGGRESSIVE" (Max / Épico)
+Para salvar vídeos oscuros, borrosos o para momentos dramáticos. El contraste es muy fuerte y la nitidez casi al máximo.
+
+JSON para n8n:
+
+JSON
+
+{
+  "command": "ffmpeg -y -i \"Y:/ChronAIclesMusic/video_input.mp4\" -map_metadata -1 -metadata title=\"Mi Video Max\" -metadata artist=\"Tu Nombre\" -c:v av1_nvenc -preset p7 -cq 24 -pix_fmt yuv420p -vf \"cas=0.9,eq=contrast=1.25:saturation=1.5:brightness=-0.05:gamma=1.2\" -c:a aac -b:a 192k \"Y:/ChronAIclesMusic/video_aggressive.mp4\""
+}
+🧠 Recordatorio rápido de las variables:
+Si quieres crear tu propio híbrido, esto es lo que tocas dentro de -vf:
+
+cas (0.0 a 1.0): Nitidez. 0.6 es el punto dulce.
+
+contrast (1.0 a 1.3): Diferencia entre blancos y negros.
+
+saturation (1.0 a 1.5): Intensidad del color.
+
+brightness: Si subes mucho el contraste, sube un pelín el brillo (ej. 0.02) para no perder detalle en lo oscuro.
